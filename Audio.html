@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Music 播放器</title>
+  <script src="js/music.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#3B82F6',
+            secondary: '#64748B',
+            accent: '#F97316',
+            dark: '#1E293B',
+            light: '#F8FAFC'
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+  <style>
+    @layer utilities {
+      .btn-active {
+        filter: brightness(0) saturate(100%) invert(48%) sepia(79%) saturate(2248%) hue-rotate(198deg) brightness(99%) contrast(92%);
+      }
+    }
+
+    .lyric-container {
+      height: 256px;
+      overflow: hidden;
+      border-radius: 0.5rem;
+      background-color: #f3f4f6;
+      margin-bottom: 1.5rem;
+    }
+    .lyric-scroll {
+      transition: transform 0.3s ease-in-out;
+      padding: 1rem 0;
+    }
+    .lyric-group {
+      margin-bottom: 0.75rem;
+      transition: all 0.3s ease;
+    }
+    .lyric-line {
+      text-align: center;
+      padding: 0.25rem 0;
+      color: #4b5563;
+      opacity: 0.8;
+      white-space: normal;
+      line-height: 1.6;
+      transition: all 0.3s ease;
+    }
+    .lyric-line.chinese {
+      font-size: 1rem;
+      font-weight: normal;
+    }
+    .lyric-line.english {
+      font-size: 0.875rem;
+      font-style: italic;
+    }
+    .lyric-group.active .lyric-line {
+      color: #000;
+      opacity: 1;
+      font-weight: bold;
+    }
+    .lyric-group.active .lyric-line.chinese {
+      font-size: 1.125rem;
+    }
+    .lyric-group.active .lyric-line.english {
+      font-size: 1rem;
+    }
+    .player-shadow {
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+      0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    }
+    /* 新增进度条交互样式 */
+    .progress-container {
+      position: relative;
+      cursor: pointer;
+    }
+    .progress-bar {
+      transition: width 0.1s ease-out;
+    }
+    .progress-thumb {
+      position: absolute;
+      top: 50%;
+      right: 0;
+      transform: translateY(-50%);
+      width: 12px;
+      height: 12px;
+      background-color: #3B82F6;
+      border-radius: 50%;
+      cursor: pointer;
+      display: none; /* 鼠标悬停时显示 */
+      z-index: 1;
+    }
+    .progress-container:hover .progress-thumb {
+      display: block;
+    }
+
+  </style>
+</head>
+<body class="bg-gradient-to-br from-gray-700 to-gray-900 min-h-screen flex items-center justify-center p-4">
+<div class="player-container max-w-3xl w-full bg-white rounded-xl overflow-hidden player-shadow">
+  <div class="flex flex-col md:flex-row">
+    <div class="album-cover w-full md:w-1/3 h-64 md:h-auto relative">
+      <img src="" alt="封面" class="w-full h-full object-cover">
+      <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex flex-col justify-end p-6">
+        <h1 class="text-white text-2xl font-bold">Making Love Out Of Nothing At All</h1>
+        <p class="text-white/80 text-lg">Air Supply</p>
+      </div>
+    </div>
+    <div class="w-full md:w-2/3 p-6 flex flex-col">
+      <div class="mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <span id="current-time" class="text-sm text-gray-500">00:00</span>
+          <span id="duration" class="text-sm text-gray-500">00:00</span>
+        </div>
+        <div class="progress-container h-1 bg-gray-200 rounded-full overflow-hidden">
+          <div id="progress-bar" class="progress-bar h-full bg-primary w-0 transition-all duration-150"></div>
+          <div id="progress-thumb" class="progress-thumb"></div>
+        </div>
+      </div>
+      <div class="flex items-center justify-center space-x-6 mb-6">
+        <button id="shuffle-btn" class="text-gray-500 hover:text-primary transition-colors flex items-center justify-center">
+          <img src="image/shuffle.png" alt="随机播放" class="w-6 h-6 btn-icon">
+        </button>
+
+        <button id="prev-btn" class="text-gray-500 hover:text-primary transition-colors flex items-center justify-center">
+          <img src="image/prev.png" alt="上一首" class="w-6 h-6 btn-icon">
+        </button>
+
+        <button id="play-btn" class="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center player-shadow hover:bg-primary/90 transition-all">
+          <img id="play-icon" src="image/play.png" alt="播放" class="w-6 h-6">
+        </button>
+
+        <button id="next-btn" class="text-gray-500 hover:text-primary transition-colors flex items-center justify-center">
+          <img src="image/next.png" alt="下一首" class="w-6 h-6 btn-icon">
+        </button>
+
+        <button id="repeat-btn" class="text-gray-500 hover:text-primary transition-colors flex items-center justify-center">
+          <img id="repeat-icon" src="image/repeat.png" alt="重复播放" class="w-6 h-6 btn-icon">
+        </button>
+      </div>
+      <div class="lyric-container">
+        <div id="lyric-scroll" class="lyric-scroll">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<audio id="audio-player" src="music/song1.mp3"></audio>
+<script>
+  const audioPlayer = document.getElementById('audio-player');
+  const playBtn = document.getElementById('play-btn');
+  const prevBtn = document.getElementById('prev-btn');
+  const nextBtn = document.getElementById('next-btn');
+  const progressBar = document.getElementById('progress-bar');
+  const progressContainer = progressBar.parentElement;
+  const progressThumb = document.getElementById('progress-thumb');
+  const currentTimeEl = document.getElementById('current-time');
+  const durationEl = document.getElementById('duration');
+  const lyricScroll = document.getElementById('lyric-scroll');
+  const shuffleBtn = document.getElementById('shuffle-btn');
+  const repeatBtn = document.getElementById('repeat-btn');
+  const songs = [
+    {
+      title: "Making Love Out Of Nothing At All",
+      artist: "Air Supply",
+      src: "music/song1.mp3",
+      cover: "../image/Logo.jpg",
+      lrc: `[00:00.00]Making Love Out of Nothing at All
+[00:03.00]Singer：Air Supply
+[00:21.00]I know just how  to whisper
+[00:21.00]我知道如何轻声细语
+[00:24.00]And I know just how to cry
+[00:24.00]我知道怎么哭
+[00:28.00]I know just where to find the answers
+[00:28.00]我知道在哪里可以找到答案
+[00:31.00]And I know just how to lie
+[00:31.00]也知道如何违心欺骗
+[00:34.00]
+[00:35.00]And I know just how to fake it
+[00:35.00]我知道如何捏造事实
+[00:38.00]And I know just how to scheme
+[00:38.00]也我知道该如何规划人生
+[00:42.00]I know just when to face the truth
+[00:42.00]我知道什么时候该面对真相
+[00:45.00]And then I know just when to dream
+[00:45.00]我然后我知道什么时候该做梦
+[00:48.00]And I know just where to touch you
+[00:48.00]我知道该怎样感动你
+[00:52.00]And I know just what to prove
+[00:52.00]也知道什么才该去证实
+[00:56.00]I know when to pull you closer
+[00:56.00]我知道什么时候该拉近你的距离
+[00:59.00]And I know when to let you loose
+[00:59.00]我知道什么时候该放你走
+[01:02.00]And I know the night is fading
+[01:02.00]我知道夜色即将褪去
+[01:05.00]And I know the time's gonna fly
+[01:05.00]我知道时间会飞逝
+[01:08.00]
+[01:10.00]And I'm never gonna tell you
+[01:10.00]我永远不会告诉你
+[01:12.00]everything I gotta tell you
+[01:12.00]我要告诉你的一切
+[01:13.00]But I know I gotta give it a try
+[01:13.00]但我知道我得试试
+[01:16.00]And I know the roads to riches
+[01:16.00]我知道致富之道
+[01:21.00]And I know the ways of fame
+[01:21.00]也知道成名的捷径
+[01:25.00]I know all the rules and then I know
+[01:25.00]我知道所有的规则，然后我知道如何
+[01:27.00]how to break them
+[01:27.00]打破它们
+[01:28.00]And I always know the name of the game
+[01:28.00]我总是知道游戏的名称
+[01:31.00]But I don't know how to leave you
+[01:31.00]但我不知道如何离开你
+[01:34.00]And I'll never let you fall
+[01:34.00]我永远不会让你跌倒
+[01:39.00]And I don't know how you do it
+[01:39.00]我不知道你是怎么做到的
+[01:43.00]Making love out of nothing at all
+[01:43.00]让爱一切成空
+[01:49.00]Out of nothing at all
+[01:49.00]一切成空
+[01:51.00]Out of nothing at all
+[01:51.00]一切成空
+[02:00.00]Out of nothing at all
+[02:00.00]一切成空
+[02:03.00]Out of nothing at all
+[02:03.00]一切成空
+[02:07.00]Out of nothing at all
+[02:07.00]一切成空
+[02:10.00]Out of nothing at all
+[02:10.00]一切成空
+[02:15.00]Every time I see you all the rays of the sun
+[02:15.00]每次我看到你，宛如太阳的光芒
+[02:19.00]Are streaming through the waves in your hair
+[02:19.00]在你头发的波浪中流淌
+[02:22.00]And every star in the sky
+[02:22.00]然后天上每颗星星
+[02:24.00]Is taking aim at your eyes like a spotlight
+[02:24.00]像聚光灯一样瞄准你的眼睛
+[02:30.00]The beating of my heart is a drum and it's lost
+[02:30.00]我的心跳如同鼓声，已经失去了方向
+[02:32.00]It's looking for a rhythm like you
+[02:32.00]它正在寻找像你一样的节奏
+[02:38.00]You can take the darkness from the pit of the night
+[02:38.00]你可以从黑夜的深渊中带走黑暗
+[02:41.00]And turn into a beacon burning endlessly bright
+[02:41.00]变成一盏永远燃烧的灯塔
+[02:45.00]I gotta follow it
+[02:45.00]我得跟着它走
+[02:47.00]Cause everything I know
+[02:47.00]因为我现在拥有的一切
+[02:48.00]It's nothing 'till I give it to you
+[02:48.00]没什么，除非我把它给你
+[03:15.00]I can make the runner stumble
+[03:15.00]我能绊倒奔跑者
+[03:17.00]I can make the final block
+[03:17.00]我可以发起总攻
+[03:21.00]And I can make every tackle
+[03:21.00]我可以阻挡每一次攻击
+[03:24.00]At the sound of the whistle
+[03:24.00]在哨声响起之际
+[03:29.00]I can make all the stadium rock
+[03:29.00]我可以让体育场人声沸腾
+[03:33.00]Or I can make it disappear by the dawn
+[03:33.00]也能让它在拂晓前消失
+[03:35.00]And I can make you every promise that has ever been made
+[03:35.00]我可以向你做出所有承诺
+[03:39.00]And I can make all your demons be gone
+[03:39.00]我可以让你所有的恶魔都消失
+[03:43.00]But I'm never gonna make it without you
+[03:43.00]但没有你，我永远活不下去
+[03:46.00]Do you really wanna see me crawl
+[03:46.00]你真的想看我爬行吗
+[03:52.00]And I'm never gonna make it like you do
+[03:52.00]我永远不会像你一样
+[03:55.00]Making love out of nothing at all
+[03:55.00]让爱一切成空
+[04:02.00]Out of nothing at all
+[04:02.00]一切成空
+[04:05.00]Out of nothing at all
+[04:05.00]一切成空
+[04:12.00]Out of nothing at all
+[04:12.00]一切成空
+[04:16.00]Out of nothing at all
+[04:16.00]一切成空
+[04:20.00]Out of nothing at all
+[04:20.00]一切成空
+[04:27.00]Out of nothing at all
+[04:27.00]一切成空
+[04:30.00]Out of nothing at all
+[04:30.00]一切成空
+[04:33.00]Out of nothing at all
+[04:33.00]一切成空
+[04:40.00]Out of nothing at all
+[04:40.00]一切成空
+[04:47.00]Out of nothing at all
+[04:47.00]一切成空
+[04:54.00]Out of nothing at all
+[04:54.00]一切成空
+[04:57.00]Out of nothing at all
+[04:57.00]一切成空
+[05:01.00]Out of nothing at all
+[05:01.00]一切成空
+[05:09.00]Out of nothing at all
+[05:09.00]一切成空
+[05:24.00]Out of nothing at all
+[05:24.00]一切成空`
+    }
+  ];
+
+  let currentSongIndex = 0;
+  let currentLyrics = [];
+  let currentLineIndex = -1;
+  let shuffleMode = false;
+  let repeatMode = 0;
+  let isDragging = false; // 进度条拖拽初始化
+  const ICONS = {
+    play: 'image/play.png',
+    pause: 'image/pause.png',
+    shuffle: 'image/shuffle.png',
+    repeat: 'image/repeat.png',
+    prev: 'image/prev.png',
+    next: 'image/next.png'
+  };
+
+  function parseLrc(lrcText) {
+    const lines = lrcText.split('\n');
+    const pattern = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/;
+    const lyrics = [];
+    let lastTime = null;
+    let chineseText = '';
+    let englishText = '';
+    lines.forEach(line => {
+      const match = line.match(pattern);
+      if (match) {
+        const minutes = parseInt(match[1], 10);
+        const seconds = parseInt(match[2], 10);
+        const milliseconds = parseInt(match[3], 10);
+        const time = minutes * 60 * 1000 + seconds * 1000 + milliseconds;
+        const text = match[4].trim();
+
+        if (text) {
+          const isChinese = /[\u4e00-\u9fa5]/.test(text);
+
+          if (time === lastTime) {
+            if (isChinese) {
+              chineseText = text;
+            } else {
+              englishText = text;
+            }
+          } else {
+            if (lastTime !== null) {
+              lyrics.push({
+                time: lastTime,
+                chinese: chineseText,
+                english: englishText
+              });
+            }
+            if (isChinese) {
+              chineseText = text;
+              englishText = '';
+            } else {
+              englishText = text;
+              chineseText = '';
+            }
+            lastTime = time;
+          }
+        }
+      }
+    });
+
+    if (lastTime !== null) {
+      lyrics.push({
+        time: lastTime,
+        chinese: chineseText,
+        english: englishText
+      });
+    }
+
+    return lyrics.sort((a, b) => a.time - b.time);
+  }
+
+  function renderLyrics() {
+    lyricScroll.innerHTML = '';
+    currentLyrics.forEach((line, index) => {
+      const lineContainer = document.createElement('div');
+      lineContainer.className = 'lyric-group';
+      lineContainer.dataset.time = line.time;
+      lineContainer.dataset.index = index;
+
+      // 先添加英文歌词
+      if (line.english) {
+        const englishLine = document.createElement('div');
+        englishLine.className = 'lyric-line english';
+        englishLine.textContent = line.english;
+        lineContainer.appendChild(englishLine);
+      }
+
+      // 再添加中文歌词
+      if (line.chinese) {
+        const chineseLine = document.createElement('div');
+        chineseLine.className = 'lyric-line chinese';
+        chineseLine.textContent = line.chinese;
+        lineContainer.appendChild(chineseLine);
+      }
+
+      lyricScroll.appendChild(lineContainer);
+    });
+  }
+
+  function updateProgress() {
+    if (isDragging) return; // 拖拽时不自动更新进度条
+
+    const { currentTime, duration } = audioPlayer;
+
+    if (duration) {
+      const progressPercent = (currentTime / duration) * 100;
+      progressBar.style.width = `${progressPercent}%`;
+      // 同步更新滑块位置
+      progressThumb.style.left = `${progressPercent}%`;
+    }
+
+    currentTimeEl.textContent = formatTime(currentTime);
+
+    syncLyrics(currentTime);
+  }
+
+  function formatTime(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    seconds = Math.floor(seconds % 60);
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  function syncLyrics(currentTime) {
+    const timeInMillis = currentTime * 1000;
+    let newLineIndex = -1;
+    for (let i = currentLyrics.length - 1; i >= 0; i--) {
+      if (currentLyrics[i].time <= timeInMillis) {
+        newLineIndex = i;
+        break;
+      }
+    }
+    if (newLineIndex !== -1 && newLineIndex !== currentLineIndex) {
+      if (currentLineIndex !== -1) {
+        const prevLine = lyricScroll.querySelector(`.lyric-group[data-index="${currentLineIndex}"]`);
+        if (prevLine) prevLine.classList.remove('active');
+      }
+
+      const currentLine = lyricScroll.querySelector(`.lyric-group[data-index="${newLineIndex}"]`);
+      if (currentLine) {
+        currentLine.classList.add('active');
+        const containerHeight = lyricScroll.parentElement.clientHeight;
+        const lineHeight = currentLine.clientHeight;
+        const lineTop = currentLine.offsetTop;
+        const scrollTop = lineTop - (containerHeight - lineHeight) / 2;
+        lyricScroll.style.transform = `translateY(-${scrollTop}px)`;
+      }
+      currentLineIndex = newLineIndex;
+    }
+  }
+
+  function setSong(index) {
+    const song = songs[index];
+    audioPlayer.src = song.src;
+
+    document.querySelector('.album-cover img').src = song.cover;
+    document.querySelector('.album-cover h1').textContent = song.title;
+    document.querySelector('.album-cover p').textContent = song.artist;
+    currentLyrics = parseLrc(song.lrc);
+    renderLyrics();
+    currentSongIndex = index;
+    currentLineIndex = -1;
+    lyricScroll.style.transform = 'translateY(0)';
+    audioPlayer.load();
+    audioPlayer.onloadedmetadata = () => {
+      durationEl.textContent = formatTime(audioPlayer.duration);
+      updateProgress(); // 加载完成后更新进度条
+    };
+  }
+
+  function playNextSong() {
+    if (shuffleMode) {
+      let randomIndex;
+      do {
+        randomIndex = Math.floor(Math.random() * songs.length);
+      } while (randomIndex === currentSongIndex);
+      setSong(randomIndex);
+    } else {
+      let nextIndex = currentSongIndex + 1;
+      if (nextIndex >= songs.length) {
+        if (repeatMode === 2) {
+          nextIndex = 0;
+        } else {
+          return;
+        }
+      }
+      setSong(nextIndex);
+    }
+    audioPlayer.play();
+    updatePlayButton();
+  }
+
+  function updatePlayButton() {
+    const playIcon = document.getElementById('play-icon');
+    if (audioPlayer.paused) {
+      playIcon.src = ICONS.play;
+      playIcon.alt = '播放';
+    } else {
+      playIcon.src = ICONS.pause;
+      playIcon.alt = '暂停';
+    }
+  }
+
+  function updateButtonStates() {
+    // 更新随机播放按钮状态
+    const shuffleIcon = shuffleBtn.querySelector('img');
+    if (shuffleMode) {
+      shuffleIcon.classList.add('btn-active');
+    } else {
+      shuffleIcon.classList.remove('btn-active');
+    }
+
+    // 更新重复播放按钮状态
+    const repeatIcon = repeatBtn.querySelector('img');
+    if (repeatMode === 0) {
+      repeatIcon.src = ICONS.repeat;
+      repeatIcon.alt = '列表循环';
+      repeatIcon.classList.remove('btn-active');
+    } else if (repeatMode === 1) {
+      repeatIcon.alt = '单曲循环';
+      repeatIcon.classList.add('btn-active');
+    } else {
+      repeatIcon.src = ICONS.repeat;
+      repeatIcon.alt = '列表循环';
+      repeatIcon.classList.add('btn-active');
+    }
+  }
+
+  // 进度条点击事件 - 快进/后退
+  progressContainer.addEventListener('click', (e) => {
+    if (!audioPlayer.duration) return; // 音频未加载完成时不处理
+
+    const containerWidth = progressContainer.offsetWidth;
+    const clickX = e.offsetX;
+    const progressPercent = (clickX / containerWidth) * 100;
+    const seekTime = (progressPercent / 100) * audioPlayer.duration;
+
+    audioPlayer.currentTime = seekTime;
+    updateProgress();
+  });
+
+  // 进度条拖拽事件 - 开始拖拽
+  progressContainer.addEventListener('mousedown', (e) => {
+    if (!audioPlayer.duration) return; // 音频未加载完成时不处理
+    isDragging = true;
+    document.body.style.cursor = 'grabbing';
+
+    // 计算并跳转至点击位置
+    const containerWidth = progressContainer.offsetWidth;
+    const clickX = e.offsetX;
+    const progressPercent = (clickX / containerWidth) * 100;
+    const seekTime = (progressPercent / 100) * audioPlayer.duration;
+
+    audioPlayer.currentTime = seekTime;
+    updateProgress();
+
+    // 阻止事件冒泡
+    e.stopPropagation();
+  });
+
+  // 窗口鼠标移动事件 - 拖拽过程
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+
+    const containerRect = progressContainer.getBoundingClientRect();
+    const containerWidth = containerRect.width;
+    const mouseX = e.clientX - containerRect.left;
+
+    if (mouseX >= 0 && mouseX <= containerWidth) {
+      const progressPercent = (mouseX / containerWidth) * 100;
+      const seekTime = (progressPercent / 100) * audioPlayer.duration;
+
+      audioPlayer.currentTime = seekTime;
+      progressBar.style.width = `${progressPercent}%`;
+      progressThumb.style.left = `${progressPercent}%`;
+      currentTimeEl.textContent = formatTime(seekTime);
+    }
+  });
+
+  // 窗口鼠标松开事件 - 结束拖拽
+  document.addEventListener('mouseup', () => {
+    if (isDragging) {
+      isDragging = false;
+      document.body.style.cursor = '';
+    }
+  });
+
+  playBtn.addEventListener('click', () => {
+    if (audioPlayer.paused) {
+      audioPlayer.play();
+    } else {
+      audioPlayer.pause();
+    }
+    updatePlayButton();
+  });
+
+  prevBtn.addEventListener('click', () => {
+    if (audioPlayer.currentTime > 5) {
+      audioPlayer.currentTime = 0;
+    } else {
+      setSong((currentSongIndex - 1 + songs.length) % songs.length);
+      audioPlayer.play();
+    }
+    updatePlayButton();
+  });
+
+  nextBtn.addEventListener('click', playNextSong);
+
+  audioPlayer.addEventListener('timeupdate', updateProgress);
+
+  audioPlayer.addEventListener('ended', () => {
+    if (repeatMode === 1) {
+      audioPlayer.currentTime = 0;
+      audioPlayer.play();
+    } else {
+      playNextSong();
+    }
+  });
+
+  audioPlayer.addEventListener('loadedmetadata', () => {
+    durationEl.textContent = formatTime(audioPlayer.duration);
+    updateProgress(); // 加载完成后更新进度条
+  });
+
+  shuffleBtn.addEventListener('click', () => {
+    shuffleMode = !shuffleMode;
+    updateButtonStates();
+  });
+
+  repeatBtn.addEventListener('click', () => {
+    repeatMode = (repeatMode + 1) % 3;
+    updateButtonStates();
+  });
+
+  // 初始化按钮状态
+  updateButtonStates();
+  setSong(currentSongIndex);
+</script>
+</body>
+</html>
